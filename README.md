@@ -75,9 +75,11 @@ SUPABASE_DB_URL=postgresql+psycopg2://postgres.[TU_ID_SUPABASE]:[TU_PASSWORD]@[a
 
 ```
 
+
+
 ### 3. Componente de Transformación Modular (`src/transform.py`)
 
-La lógica de calidad de datos se centralizó en un módulo independiente para garantizar el desacoplamiento del código. 
+La lógica de calidad de datos se centralizó en un módulo independiente para garantizar el desacoplamiento del código.
 
 <details>
 <summary><b>Haz clic aquí para ver el código fuente de transform.py</b></summary>
@@ -108,6 +110,9 @@ def limpiar_y_transformar(df: pd.DataFrame) -> pd.DataFrame:
     df_clean['es_monto_inusual'] = np.where(condicion_inusual, True, False)
     
     return df_clean
+
+```
+
 </details>
 
 ---
