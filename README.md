@@ -1,10 +1,3 @@
-Tu justificación de calidad y el diagrama conceptual de la arquitectura están **impecables**. Tienen un tono sumamente profesional, justifican técnicamente cada decisión de diseño y demuestran un dominio real de la infraestructura (mencionar el comportamiento de `psycopg2-binary` y SQLAlchemy suma muchos puntos).
-
-Para que no dejes los bloques genéricos con corchetes (`[ ]`) en tu entrega final, integré tus textos directamente en la estructura del **`README.md`** definitivo. También corregí un pequeño salto de código que quedó cortado a la mitad en la sección de Git (`cd`).
-
-Copia este bloque completo, pégalo en tu archivo **`README.md`** y tu documentación estará 100% lista para producción:
-
-```markdown
 # Prueba Técnica: Associate Data Engineer - Pipeline de Transacciones
 
 Este proyecto implementa un pipeline de datos automatizado (ETL) para la ingesta, limpieza, transformación y carga de transacciones financieras diarias en un almacén de datos basado en la nube (Supabase / PostgreSQL), incluyendo un análisis avanzado de detección de anomalías y fraude.
@@ -15,35 +8,38 @@ Este proyecto implementa un pipeline de datos automatizado (ETL) para la ingesta
 
 ### 1. Justificación de Calidad (Criterios de Diseño)
 
-* **Regla 1 (Duplicados - id_transaccion):** Eliminar registros duplicados es crucial para evitar la sobreestimación del volumen transaccional y asegurar que cada evento financiero sea único.
-* **Regla 2 (Tratamiento de Nulos - monto_usd):** Asignar `0.0` a las transacciones nulas que fueron "rechazadas" homologa el tipo de dato numérico sin alterar los balances financieros reales ni romper las operaciones matemáticas de la base de datos.
-* **Regla 3 (Clasificación de Montos Inusuales - es_monto_inusual):** Precalcular esta bandera optimiza las consultas de la capa analítica al identificar inmediatamente transacciones internacionales críticas ($> \$1,500$ USD).
-* **Regla 4 (Análisis de Anomalías):** Filtra estrictamente el universo de datos analizados para evaluar únicamente transacciones en estado "aprobada", ordenando el historial cronológicamente por cliente para rastrear picos abruptos de consumo mediante funciones de ventana.
+Para asegurar un estándar profesional de gobernanza de datos, el módulo de transformación (`transform.py`) implementa controles estrictos basados en las **4 dimensiones esenciales de Data Quality**:
+
+* **Regla 1 (Duplicados - id_transaccion) | Dimensión: UNICIDAD** Eliminar registros duplicados (como el ID `T-001` presente en el archivo crudo) mitiga el riesgo de sobreestimación del volumen transaccional y previene distorsiones en los balances financieros acumulados de la compañía.
+* **Regla 2 (Tratamiento de Nulos - monto_usd) | Dimensión: COMPLETITUD** Asignar de forma controlada el valor `0.0` a los montos nulos que correspondan exclusivamente a transacciones con estado `"rechazada"`. Esto preserva la integridad del esquema relacional y evita excepciones críticas de cálculo matemático en el almacén de datos sin inventar flujos de caja ficticios.
+* **Regla 3 (Montos Inusuales - es_monto_inusual) | Dimensión: CONSISTENCIA** El precalculo de la bandera booleana para transacciones internacionales superiores a \$1,500 USD enriquece el dato en la capa de transformación. Esto optimiza el rendimiento analítico, eliminando la necesidad de realizar costosos filtrados de cadenas de texto en consultas concurrentes posteriores.
+* **Regla 4 (Análisis de Anomalías) | Dimensión: OPORTUNIDAD** Estandarizar cadenas de texto mediante remoción de espacios (*trimming*) y conversión explícita de `fecha_hora` a tipo temporal (`datetime`). Aislar únicamente los registros en estado `"aprobada"` garantiza un cálculo cronológico preciso de la velocidad del dinero vía funciones de ventana (`LAG`), eliminando falsos positivos causados por fallas técnicas en pasarelas de pago.
+
+---
 
 ### 2. Diagrama de Arquitectura Conceptual
-El flujo sigue una arquitectura ETL limpia empleando formatos eficientes:
 
-```text
-[ transacciones_diarias.csv ]  <-- Fuente de Origen (Archivo Crudo)
-             │
-             ▼  (Ingesta e Inferencia de Tipos con Pandas)
-      [ Capa Staging ]
-             │
-             ▼  (Lógica de Limpieza y Enriquecimiento) 
-     [ Capa Enriquecida ]
-             │
-             ▼  (Carga en Bloques vía SQLAlchemy / Psycopg2) 
-  [ Supabase (PostgreSQL) ]    <-- Base de Datos Centralizada (vía Puerto 6543)
-             │
-             ▼  (Filtrado y Ventanas de Tiempo con SQL / CTEs)
-  [ Consulta de Anomalías ]    <-- Alertas para Prevención de Fraude
+El flujo de datos se diseñó bajo una topología ETL lineal acoplada a través de un pooler de conexiones en la nube:
 
+```mermaid
+graph TD
+    A[(transacciones_diarias.csv)] -->|1. Extracción e Inferencia| B[Capa Staging <br> Pandas RAM]
+    B -->|2. Transformación <br> drop_duplicates / to_datetime| C[Capa Enriquecida <br> Data Quality Rules]
+    C -->|3. Carga en Bloques <br> SQLAlchemy / Puerto 6543| D{Supabase <br> PostgreSQL Cloud}
+    D -->|4. Ventanas de Tiempo <br> CTEs & LAG| E[Consulta de Anomalías <br> Reporte de Fraude]
+
+    style A fill:#f9f,stroke:#333,stroke-width:2px
+    style D fill:#bbf,stroke:#333,stroke-width:2px
+    style E fill:#f99,stroke:#333,stroke-width:2px
 ```
 
 #### Librerías Utilizadas:
+##### Infraestructura y Core ETL:
 
-* **pandas:** Manipulación ágil de estructuras de datos bidimensionales en memoria.
-* **sqlalchemy y psycopg2-binary:** Conectores robustos y seguros para interactuar dinámicamente con el motor de PostgreSQL en Supabase.
+* **pandas:** Utilizado para la manipulación ágil, tipado e ingesta eficiente de estructuras bidimensionales de datos en memoria (DataFrames).
+* **sqlalchemy:** Actúa como la capa de abstracción de base de datos (ORM) para gestionar de forma segura el pool de conexiones hacia la nube.
+* **psycopg2-binary:** Adaptador nativo de PostgreSQL para Python, encargado de ejecutar la inyección óptima de los bloques de datos transformados hacia Supabase.
+* **python-dotenv:** Permite la carga dinámica de variables de entorno, aislando las credenciales y URLs de producción del código fuente para garantizar la seguridad del repositorio.
 
 ---
 
