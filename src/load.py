@@ -1,26 +1,34 @@
-# src/load.py
-from sqlalchemy import create_engine
-import pandas as pd
+import os
 import urllib.parse
+import pandas as pd
+from sqlalchemy import create_engine
+from dotenv import load_dotenv
+
+# Cargamos las variables del archivo .env local
+load_dotenv()
 
 def cargar_a_supabase(df: pd.DataFrame, nombre_tabla: str):
     """
-    Establece conexión con Supabase utilizando los datos reales del 
-    Transaction Pooler (Puerto 6543) obtenidos del panel oficial.
+    Establece conexión segura con Supabase utilizando variables de entorno
+    y carga los datos transformados de forma optimizada.
     """
-    # 1. Contraseña real protegida para URL
-    contrasena_cruda = "4NiJE@/k!y9%VXb"
-    contrasena_segura = urllib.parse.quote_plus(contrasena_cruda)
+    # 1. Extraer credenciales aisladas del código de forma segura
+    database_uri = os.getenv("SUPABASE_DB_URL")
     
-    # 2. LA CADENA DE CONEXIÓN EXACTA DEL POOLER:
-    # Formato obligatorio: postgres.ID_PROYECTO:PASSWORD@HOST_DE_TU_IMAGEN:6543/postgres
-    DATABASE_URI = f"postgresql://postgres.krwigrqjeetneiyiesbn:{contrasena_segura}@aws-1-us-west-2.pooler.supabase.com:6543/postgres"
+    if not database_uri:
+        raise ValueError("Error Crítico: La variable de entorno SUPABASE_DB_URL no está configurada.")
     
     try:
-        print("Conectando con el Transaction Pooler de Supabase (AWS West)...")
-        engine = create_engine(DATABASE_URI)
+        print("Conectando de forma segura con el Transaction Pooler de Supabase (Puerto 6543)...")
+        # Configurar el motor con SSL requerido para cifrar los datos en tránsito
+        engine = create_engine(
+            database_uri,
+            connect_args={"sslmode": "require"}
+        )
         
-        print(f"Insertando {len(df)} registros en la tabla '{nombre_tabla}'...")
+        print(f"Iniciando carga: Insertando {len(df)} registros en la tabla '{nombre_tabla}'...")
+        
+        # 2. Inyección eficiente por bloques
         df.to_sql(
             name=nombre_tabla,
             con=engine,
@@ -28,7 +36,8 @@ def cargar_a_supabase(df: pd.DataFrame, nombre_tabla: str):
             index=False,          
             chunksize=1000        
         )
-        print("¡Carga completada exitosamente en Supabase!")
+        print("¡Carga completada exitosamente en el Data Warehouse Cloud (supabase)!")
         
     except Exception as e:
-        print(f"Error crítico durante la carga a la base de datos: {e}")
+        print(f"Error crítico durante la fase de Carga (Load): {e}")
+        raise e  # Re-lanzamos el error para que Airflow o el main lo capturen y emitan alertas
