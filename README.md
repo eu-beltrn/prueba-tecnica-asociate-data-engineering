@@ -108,7 +108,9 @@ def limpiar_y_transformar(df: pd.DataFrame) -> pd.DataFrame:
     df_clean['es_monto_inusual'] = np.where(condicion_inusual, True, False)
     
     return df_clean
----</details>
+</details>
+
+---
 
 ### Ejecución del Pipeline
 
