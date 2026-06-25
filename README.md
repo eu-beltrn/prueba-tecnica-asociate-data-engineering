@@ -258,10 +258,10 @@ A continuación se detalla el resultado consolidado de la consulta analítica av
 
 | ID Cliente | ID Transacción | Fecha y Hora | Monto Anterior | Monto Actual | Multiplicador (Veces Mayor) | Prioridad de Riesgo |
 | --- | --- | --- | --- | --- | --- | --- |
-| **C-101** | T-117 | 2026-06-18 19:15:00 | $10.00 | $80.00 | **8.00x** | 🚨 Alta (Crítica) |
-| **C-101** | T-005 | 2026-06-18 09:30:00 | $50.00 | $350.00 | **7.00x** | 🚨 Alta (Crítica) |
-| **C-146** | T-051 | 2026-06-18 13:50:00 | $15.00 | $100.00 | **6.67x** | ⚠️ Media |
-| **C-120** | T-024 | 2026-06-18 11:15:00 | $25.00 | $150.00 | **6.00x** | ⚠️ Media |
+| **C-101** | T-117 | 2026-06-18 19:15:00 | $10.00 | $80.00 | **8.00x** | Alta (Crítica) |
+| **C-101** | T-005 | 2026-06-18 09:30:00 | $50.00 | $350.00 | **7.00x** | Alta (Crítica) |
+| **C-146** | T-051 | 2026-06-18 13:50:00 | $15.00 | $100.00 | **6.67x** | Media |
+| **C-120** | T-024 | 2026-06-18 11:15:00 | $25.00 | $150.00 | **6.00x** | Media |
 
 #### Análisis de Hallazgos y Riesgos de Ciberseguridad:
 
