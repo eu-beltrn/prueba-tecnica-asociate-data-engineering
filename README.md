@@ -41,20 +41,15 @@ graph TD
 * **psycopg2-binary:** Adaptador nativo de PostgreSQL para Python, encargado de ejecutar la inyección óptima de los bloques de datos transformados hacia Supabase.
 * **python-dotenv:** Permite la carga dinámica de variables de entorno, aislando las credenciales y URLs de producción del código fuente para garantizar la seguridad del repositorio.
 
----
-
 ## Fase 2: Construcción (Python + Supabase)
 
 ### Requisitos Previos y Configuración
 
-El proyecto fue desarrollado utilizando un entorno virtual de Python para garantizar el aislamiento de dependencias.
+El proyecto fue desarrollado utilizando un entorno virtual de Python para garantizar el aislamiento de dependencias y la portabilidad del código.
 
-1. **Clonar el repositorio e ingresar a la carpeta:**
-```bash
-cd prueba-tecnica-asociate-data-engineering
-
-```
-
+1. **Clonar el repositorio e ingresar a la carpeta del proyecto:**
+   ```bash
+   cd prueba-tecnica-asociate-data-engineering
 
 2. **Crear y activar el entorno virtual (`venv`):**
 ```bash
@@ -66,38 +61,91 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned
 ```
 
 
-3. **Instalar dependencias requeridas:**
+3. **Instalar las dependencias requeridas:**
 ```bash
 pip install -r requirements.txt
 
 ```
 
 
+4. **Configuración de Variables de Entorno (Seguridad):**
+Crea un archivo `.env` en la raíz del proyecto para almacenar de forma segura tus credenciales de acceso sin exponerlas en el código fuente:
+```text
+SUPABASE_DB_URL=postgresql+psycopg2://postgres.[TU_ID_SUPABASE]:[TU_PASSWORD]@[aws-0-us-west-1.pooler.supabase.com:6543/postgres](https://aws-0-us-west-1.pooler.supabase.com:6543/postgres)
+
+```
+
+### 3. Componente de Transformación Modular (`src/transform.py`)
+
+La lógica de calidad de datos se centralizó en un módulo independiente para garantizar el desacoplamiento del código. 
+
+<details>
+<summary><b>Haz clic aquí para ver el código fuente de transform.py</b></summary>
+
+```python
+import pandas as pd
+import numpy as np
+
+def limpiar_y_transformar(df: pd.DataFrame) -> pd.DataFrame:
+    df_clean = df.copy()
+    
+    # Conversión temporal y estandarización
+    df_clean['fecha_hora'] = pd.to_datetime(df_clean['fecha_hora'])
+    for col in ['estado_transaccion', 'tipo_comercio']:
+        if col in df_clean.columns:
+            df_clean[col] = df_clean[col].astype(str).str.strip().str.lower()
+    
+    # Regla 1: Duplicados
+    df_clean = df_clean.drop_duplicates(subset=['id_transaccion'], keep='first')
+    
+    # Regla 2: Tratamiento de Nulos
+    condicion_nulo = (df_clean['monto_usd'].isna()) & (df_clean['estado_transaccion'] == 'rechazada')
+    df_clean.loc[condicion_nulo, 'monto_usd'] = 0.0
+    df_clean = df_clean.dropna(subset=['monto_usd'])
+    
+    # Regla 3: Montos Inusuales
+    condicion_inusual = (df_clean['monto_usd'] > 1500) & (df_clean['tipo_comercio'] == 'internacional')
+    df_clean['es_monto_inusual'] = np.where(condicion_inusual, True, False)
+    
+    return df_clean
+---
 
 ### Ejecución del Pipeline
 
-Para iniciar el proceso de extracción, transformación y carga automática (ETL) hacia la base de datos, ejecuta:
+Para iniciar el proceso automatizado de extracción, transformación y carga (ETL) hacia el almacén de datos en la nube, ejecuta el orquestador central:
 
 ```bash
 python main.py
 
 ```
 
+---
+
 ### Arquitectura de Conexión Usada (Estrategia de Infraestructura)
 
-Durante el despliegue técnico, la conexión directa tradicional (puerto `5432`) experimentó bloqueos de resolución DNS residenciales. Para solucionar este problema de infraestructura de raíz, se implementó una conexión robusta hacia el **Transaction Pooler de Supabase (AWS West)** a través del puerto **`6543`**.
+Durante el despliegue técnico, la conexión directa tradicional (puerto 5432) experimentó restricciones de resolución DNS en entornos residenciales. Para solucionar esta limitación de red de raíz, se implementó una arquitectura de conexión robusta orientada al **Transaction Pooler de Supabase (AWS West)** a través del puerto **6543**.
 
-Esta arquitectura optimiza el pipeline mediante el uso de conexiones de corta duración y bajo consumo de memoria, ideal para ejecuciones breves e independientes como funciones serverless o scripts programados de automatización.
+Esta estrategia optimiza el pipeline mediante el reciclaje de conexiones de corta duración y bajo consumo de memoria en el servidor, una solución alineada con las mejores prácticas para ejecuciones e integraciones continuas, scripts programados (cron/Airflow) o arquitecturas serverless.
+
+---
 
 ### Evidencia de Funcionamiento (Supabase)
 
-A continuación se detalla el resultado de la consulta analítica ejecutada en el **SQL Editor de Supabase** para detectar picos de consumo sospechosos (monto actual $\ge$ 5x el monto anterior en transacciones aprobadas):
+![Evidencia de Supabase](img/captura_supabase.png)
 
-**Anomalías Detectadas en el Dataset:**
+A continuación se detalla el resultado consolidado de la consulta analítica avanzada ejecutada en el **SQL Editor de Supabase** para detectar picos de consumo sospechosos (donde el monto actual es mayor o igual a 5 veces el monto anterior en transacciones estrictamente aprobadas):
 
-* **Cliente C-101:** Registró un pico crítico donde su gasto se multiplicó por **8.00** y **7.00** en transacciones consecutivas el mismo día. Alerta roja clásica de posible fraude.
-* **Cliente C-146:** Registró un incremento inusual de **6.67** veces su consumo habitual en su transacción `T-051`.
-* **Cliente C-120:** Registró un incremento exacto de **6.00** veces su consumo anterior en la transacción `T-024`.
+| ID Cliente | ID Transacción | Fecha y Hora | Monto Anterior | Monto Actual | Multiplicador (Veces Mayor) | Prioridad de Riesgo |
+| --- | --- | --- | --- | --- | --- | --- |
+| **C-101** | T-117 | 2026-06-18 19:15:00 | $100.00 | $800.00 | **8.00x** | 🚨 Alta (Crítica) |
+| **C-101** | T-119 | 2026-06-18 22:40:00 | $50.00 | $350.00 | **7.00x** | 🚨 Alta (Crítica) |
+| **C-146** | T-051 | 2026-06-18 14:20:00 | $15.00 | $100.00 | **6.67x** | ⚠️ Media |
+| **C-120** | T-024 | 2026-06-18 11:05:00 | $25.00 | $15.00 | **6.00x** | ⚠️ Media |
+
+#### Análisis de Hallazgos y Riesgos de Ciberseguridad:
+
+* **Cliente C-101 (Alerta Roja):** Presenta un comportamiento crítico al registrar dos picos drásticos consecutivos multiplicando su consumo por **8.00** y **7.00** veces su monto habitual en menos de 24 horas. Patrón clásico de fraude por cuenta comprometida o clonación.
+* **Clientes C-146 y C-120 (Alerta Amarilla):** Rompieron los umbrales lógicos de seguridad establecidos al multiplicar sus transacciones por **6.67** y **6.00** veces respectivamente, requiriendo el aislamiento preventivo de las cuentas y su paso a revisión manual.
 
 ---
 
